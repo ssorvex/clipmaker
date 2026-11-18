@@ -20,7 +20,9 @@ import argparse
 import shutil
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -95,20 +97,24 @@ def _write_youtube_sheet(dest: Path, results: list[dict], source: str) -> None:
 
 # --- the main command -----------------------------------------------------
 
-def cmd_make(args: argparse.Namespace) -> int:
-    require("ffmpeg")
-    require("ffprobe")
+@dataclass
+class Prepared:
+    """Everything mechanical about a source, before any judgement is applied."""
+    source: Path
+    probe: Any
+    transcript: Any
+    candidates: list
+    fetched: Any
+    work_dir: Path
 
-    out_dir = Path(args.out).expanduser().resolve()
-    work_dir = out_dir / ".work"
-    cache_dir = Path(args.sfx_cache).expanduser().resolve() if args.sfx_cache \
-        else work_dir / "sfx_cache"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    work_dir.mkdir(parents=True, exist_ok=True)
 
-    total = 6
-    t_start = time.time()
+def prepare(args: argparse.Namespace, work_dir: Path, *, total: int) -> Prepared:
+    """Fetch, probe, transcribe, shortlist — the half with no taste in it.
 
+    Split out because the judgement that follows can come from a model, from a
+    file, or from a person, and because watching a channel wants this half on
+    its own: run it the moment a video appears, leave the picking for later.
+    """
     # 0. fetch, when the source is a link rather than a file on disk
     fetched = None
     if fetch_mod.is_url(args.source):
@@ -187,6 +193,65 @@ def cmd_make(args: argparse.Namespace) -> int:
         log(f"        [{c.id:2d}] {fmt_timecode(c.start)}–{fmt_timecode(c.end)} "
             f"score={c.score:+.2f} {c.text[:66]}")
     write_json(work_dir / "candidates.json", [c.to_dict() for c in cands])
+
+    return Prepared(source=source, probe=pr, transcript=transcript,
+                    candidates=cands, fetched=fetched, work_dir=work_dir)
+
+
+def _write_dossier(prep: Prepared, out_dir: Path, source: str) -> int:
+    """Write what is needed to pick clips, and stop before rendering any.
+
+    One file to read rather than three queries: every utterance with the
+    second it starts at. That is precise enough to choose a cut point without
+    going back to the word timings, which is the slow part of picking.
+    """
+    lines = [f"{u.start:8.2f}  {u.text}" for u in prep.transcript.utterances]
+    (out_dir / "transcript.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    f = prep.fetched
+    write_json(out_dir / "source.json", {
+        "source": source,
+        "title": f.title if f else Path(source).name,
+        "uploader": f.uploader if f else "",
+        "duration": round(prep.probe.duration, 2),
+        "language": prep.transcript.language,
+        "utterances": len(prep.transcript.utterances),
+        "words": len(prep.transcript.words),
+    })
+    write_json(out_dir / "candidates.json",
+               [c.to_dict() for c in prep.candidates])
+
+    log("")
+    log(f"dossier ready in {out_dir}")
+    log(f"  transcript.txt   {len(prep.transcript.utterances)} lines, "
+        f"{len(prep.transcript.words)} words")
+    log(f"  candidates.json  {len(prep.candidates)} shortlisted moments")
+    log("")
+    log("write a plan, then cut it:")
+    log(f'  python clipmaker.py make "{source}" --plan <plan.json> --out <dir>')
+    return 0
+
+
+def cmd_make(args: argparse.Namespace) -> int:
+    require("ffmpeg")
+    require("ffprobe")
+
+    out_dir = Path(args.out).expanduser().resolve()
+    work_dir = out_dir / ".work"
+    cache_dir = Path(args.sfx_cache).expanduser().resolve() if args.sfx_cache \
+        else work_dir / "sfx_cache"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    total = 6
+    t_start = time.time()
+
+    prep = prepare(args, work_dir, total=total)
+    source, pr = prep.source, prep.probe
+    transcript, cands, fetched = prep.transcript, prep.candidates, prep.fetched
+
+    if args.prep_only:
+        return _write_dossier(prep, out_dir, args.source)
 
     # 4. direct
     step(4, total, "choosing and designing clips ...")
@@ -416,6 +481,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--model", default=director.DEFAULT_MODEL, help="Claude model id")
     g.add_argument("--effort", default="high",
                    choices=["low", "medium", "high", "xhigh", "max"])
+    g.add_argument("--prep-only", action="store_true",
+                   help="stop after shortlisting and write a dossier to pick "
+                        "from; renders nothing")
     g.add_argument("--plan", default="",
                    help="cut the clips named in a JSON plan instead of choosing "
                         "them: the editorial pass done elsewhere, no model call")
