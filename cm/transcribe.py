@@ -161,5 +161,102 @@ def transcribe(
     return transcript
 
 
+_WORD_MAX = 1.2           # a 'word' longer than this is a caption artefact
+_UTTERANCE_GAP = 0.7      # a pause longer than this starts a new utterance
+_UTTERANCE_MAX = 6.0      # ... and so does running on for this long
+
+
+def _spread(texts: list[str], stamps: list[float], end: float) -> list[float]:
+    """Give words even timings across a line that was stamped as one block."""
+    span = max(end - stamps[0], 0.25 * len(texts))
+    return [stamps[0] + i * span / len(texts) for i in range(len(texts))]
+
+
+def _json3_words(events: list[dict[str, Any]]) -> list[Word]:
+    words: list[Word] = []
+    for ev in events:
+        if ev.get("aAppend"):
+            continue        # rolling duplicate of the line before it
+        start = float(ev.get("tStartMs", 0)) / 1000.0
+        dur = float(ev.get("dDurationMs", 0)) / 1000.0
+        end = start + dur if dur > 0 else start
+
+        texts: list[str] = []
+        stamps: list[float] = []
+        for seg in ev.get("segs") or []:
+            text = (seg.get("utf8") or "").strip()
+            if not text:
+                continue        # newline-only filler
+            texts.append(text)
+            stamps.append(start + float(seg.get("tOffsetMs", 0)) / 1000.0)
+        if not texts:
+            continue
+
+        # Hand-written tracks time whole lines, not words, and auto-generated
+        # ones sometimes stamp every segment at the line start. Both get spread.
+        if len(texts) == 1 and " " in texts[0]:
+            texts = texts[0].split()
+            stamps = _spread(texts, stamps, end)
+        elif len(texts) > 1 and stamps[-1] - stamps[0] < 0.05:
+            stamps = _spread(texts, stamps, end)
+
+        for i, (w_start, text) in enumerate(zip(stamps, texts)):
+            if i + 1 < len(stamps):
+                w_end = stamps[i + 1]
+            else:
+                # A line's own duration is the only clue for its last word, and
+                # auto-captions routinely overrun well past where speech stopped.
+                w_end = min(max(end, w_start + 0.12), w_start + _WORD_MAX)
+            words.append(Word(w_start, max(w_end, w_start + 0.08), text))
+
+    words.sort(key=lambda w: w.start)
+    # Caption events overlap, so a line's last word can outlive the first word
+    # of the line after it. Left alone, that swallows the speech gaps the cue
+    # placer aims for and holds captions on screen too long.
+    for earlier, later in zip(words, words[1:]):
+        if earlier.end > later.start:
+            earlier.end = max(later.start, earlier.start + 0.08)
+    return words
+
+
+def _flush(bucket: list[Word]) -> Utterance:
+    return Utterance(bucket[0].start, bucket[-1].end,
+                     " ".join(w.text for w in bucket), list(bucket))
+
+
+def from_json3(path: Path | str, *, language: str = "") -> Transcript:
+    """Build a transcript from a YouTube json3 caption track.
+
+    Auto-generated captions carry a per-word offset, which is precisely what
+    the cue placer and the caption burner need — so a fetched video usually
+    needs no Whisper at all, saving a 500 MB model download and minutes of CPU
+    on every run.
+    """
+    path = Path(path)
+    data = read_json(path)
+    if not isinstance(data, dict) or "events" not in data:
+        raise ToolError(f"{path.name} is not a json3 caption file")
+
+    words = _json3_words(data.get("events") or [])
+    if not words:
+        raise ToolError(f"{path.name} holds no timed words")
+
+    utterances: list[Utterance] = []
+    bucket: list[Word] = []
+    for word in words:
+        too_late = bucket and word.start - bucket[-1].end > _UTTERANCE_GAP
+        too_long = bucket and word.end - bucket[0].start > _UTTERANCE_MAX
+        if too_late or too_long:
+            utterances.append(_flush(bucket))
+            bucket = []
+        bucket.append(word)
+    if bucket:
+        utterances.append(_flush(bucket))
+
+    if not language and path.name.count(".") >= 2:
+        language = path.name.split(".")[-2]
+    return Transcript(language=language or "en", utterances=utterances)
+
+
 def empty_transcript() -> Transcript:
     return Transcript(language="", utterances=[])

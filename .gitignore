@@ -6,3 +6,4 @@ clips/
 sfx_preview/
 # user-supplied audio: keep the folder structure, not the media
 sfx_library/*/
+.downloads/

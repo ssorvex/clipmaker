@@ -14,3 +14,8 @@ faster-whisper>=1.0
 
 # Only needed without --no-llm, i.e. for the clip-selection / sound-design pass.
 anthropic>=2.0
+
+# Fetching a source from a link (YouTube and the ~1800 other sites yt-dlp
+# handles) and lifting the word-timed captions the site already published,
+# which saves a whole Whisper pass. Sites change; update this often.
+yt-dlp>=2025.1

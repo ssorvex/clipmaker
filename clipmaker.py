@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cm import candidates as cand_mod
 from cm import captions as cap_mod
+from cm import fetch as fetch_mod
 from cm import cueplan, director, probe as probe_mod, render as render_mod, sfx as sfx_mod
 from cm import transcribe as asr_mod
 from cm.util import ToolError, fmt_timecode, require, slugify, write_json
@@ -98,10 +99,6 @@ def cmd_make(args: argparse.Namespace) -> int:
     require("ffmpeg")
     require("ffprobe")
 
-    source = Path(args.source).expanduser().resolve()
-    if not source.is_file():
-        raise ToolError(f"no such file: {source}")
-
     out_dir = Path(args.out).expanduser().resolve()
     work_dir = out_dir / ".work"
     cache_dir = Path(args.sfx_cache).expanduser().resolve() if args.sfx_cache \
@@ -111,6 +108,31 @@ def cmd_make(args: argparse.Namespace) -> int:
 
     total = 6
     t_start = time.time()
+
+    # 0. fetch, when the source is a link rather than a file on disk
+    fetched = None
+    if fetch_mod.is_url(args.source):
+        download_dir = Path(args.download_dir).expanduser().resolve() \
+            if args.download_dir else Path(__file__).parent / ".downloads"
+        log(f"[fetch] {args.source}")
+        fetched = fetch_mod.fetch(
+            args.source, download_dir, max_height=args.max_height,
+            want_subs=not args.no_yt_subs, language=args.language,
+            cookies_from_browser=args.cookies_from_browser,
+        )
+        source = fetched.video
+        log(f"      {fetched.title}")
+        log(f"      {fetched.duration / 60:.1f} min"
+            + (f", {fetched.uploader}" if fetched.uploader else "")
+            + ("  (already on disk)" if fetched.cached else ""))
+        if fetched.subtitles:
+            log(f"      captions available: {fetched.sub_language}")
+        else:
+            log("      no captions published for this one — will transcribe locally")
+    else:
+        source = Path(args.source).expanduser().resolve()
+        if not source.is_file():
+            raise ToolError(f"no such file: {source}")
 
     # 1. probe
     step(1, total, "analysing audio and picture ...")
@@ -124,9 +146,20 @@ def cmd_make(args: argparse.Namespace) -> int:
     # 2. transcribe
     step(2, total, "transcribing ...")
     transcript = asr_mod.empty_transcript()
-    if args.no_asr or not pr.has_audio:
+    yt_subs = fetched.subtitles if (fetched is not None and not args.no_yt_subs) else None
+    if yt_subs is not None:
+        try:
+            transcript = asr_mod.from_json3(yt_subs, language=fetched.sub_language)
+            log(f"      {len(transcript.utterances)} utterances, "
+                f"{len(transcript.words)} words from the site's own captions "
+                f"(lang={transcript.language}) — no Whisper needed")
+        except ToolError as exc:
+            log(f"      ! {exc}")
+            log("      falling back to local transcription")
+            yt_subs = None
+    if yt_subs is None and (args.no_asr or not pr.has_audio):
         log("      skipped (--no-asr)" if args.no_asr else "      skipped (no audio)")
-    else:
+    elif yt_subs is None:
         try:
             t0 = time.time()
             transcript = asr_mod.transcribe(
@@ -353,13 +386,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     m = sub.add_parser("make", help="make clips from a video",
                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    m.add_argument("source", help="the long video file")
+    m.add_argument("source", help="the long video: a file path, or a URL to fetch")
     m.add_argument("--out", "-o", default="./clips", help="output directory")
     m.add_argument("--clips", "-n", type=int, default=5, help="how many clips to make")
     m.add_argument("--min-len", type=float, default=18.0, help="minimum clip seconds")
     m.add_argument("--max-len", type=float, default=58.0, help="maximum clip seconds")
     m.add_argument("--shortlist", type=int, default=12,
                    help="candidates to shortlist before the model picks")
+
+    g = m.add_argument_group("fetching a URL")
+    g.add_argument("--max-height", type=int, default=1080,
+                   help="cap the resolution of a downloaded source")
+    g.add_argument("--no-yt-subs", action="store_true",
+                   help="ignore the site's own captions and transcribe locally")
+    g.add_argument("--cookies-from-browser", default="",
+                   help="chrome|edge|firefox — borrow a signed-in session for "
+                        "age-gated or sign-in-walled videos")
+    g.add_argument("--download-dir", default="",
+                   help="where to keep fetched sources "
+                        "(default: .downloads beside this script)")
 
     g = m.add_argument_group("model")
     g.add_argument("--model", default=director.DEFAULT_MODEL, help="Claude model id")

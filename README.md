@@ -6,7 +6,17 @@ design.
 ```bash
 pip install -r requirements.txt          # ffmpeg must already be on PATH
 export ANTHROPIC_API_KEY=sk-ant-...      # or run with --no-llm
+
 python clipmaker.py make long-video.mp4 --clips 5 --out ./clips
+python clipmaker.py make "https://youtu.be/XXXXXXXX" --min-len 30 --max-len 60
+```
+
+The source can be a file or a link. On Windows there is a wrapper that fixes
+the shorts-shaped defaults — 5 clips, 30–60 seconds, captions, sound design:
+
+```powershell
+.\clip.ps1 https://youtu.be/XXXXXXXX
+.\clip.ps1 https://youtu.be/XXXXXXXX -Clips 3 -MaxLen 45
 ```
 
 You get, per clip: a 1080×1920 MP4 with burned captions and placed sound
@@ -15,10 +25,59 @@ effects, normalised to −14 LUFS (YouTube's target), plus a `meta.json`, and on
 
 ---
 
+## From a link
+
+`make` takes a URL anywhere it takes a file — anything yt-dlp handles, which is
+YouTube and some 1800 other sites.
+
+```bash
+python clipmaker.py make "https://www.youtube.com/watch?v=XXXXXXXX"
+```
+
+Two things are worth knowing.
+
+**The source is cached by video id** in `.downloads/` beside the script. Running
+again on the same link — a different clip count, different sound settings — costs
+no second download. `--download-dir` puts them somewhere else.
+
+**The site's own captions beat Whisper.** YouTube publishes a word-timed
+transcript for most videos, and lifting it takes a second; Whisper wants a
+500 MB model download and minutes of CPU for the same answer. The fetch pulls
+the caption track in the same pass and the transcript step uses it, so a fetched
+video usually never touches Whisper. `--no-yt-subs` forces local transcription.
+
+Those captions are not always there. **A video uploaded minutes ago usually has
+none yet** — YouTube takes a while to generate them — and the run quietly falls
+back to Whisper, which is why `faster-whisper` is still worth having installed
+before a launch day you care about.
+
+Captions also come as one line per phrase with the words timed inside it.
+Hand-written tracks time only the line; those get their words spread across it,
+which is close enough to caption and to keep sound effects off the middle of a
+word. Auto-caption lines overlap each other, and the overlap is trimmed — left
+in, it swallows the speech gaps the cue placer aims for.
+
+Some videos want a signed-in session (age-gated, or YouTube's "confirm you're
+not a bot" wall):
+
+```bash
+python clipmaker.py make "<url>" --cookies-from-browser chrome
+```
+
+YouTube changes its internals constantly and yt-dlp chases them. If a fetch that
+worked last week starts failing, update that first:
+
+```bash
+pip install --upgrade yt-dlp
+```
+
+---
+
 ## How it works
 
 | Stage | What it does | Cost |
 |---|---|---|
+| **fetch** | pull the video and its captions, cached by id | free, yt-dlp |
 | **probe** | loudness envelope, speech gaps, scene cuts | free, ffmpeg |
 | **transcribe** | word-level timestamps | free, local (faster-whisper) |
 | **shortlist** | score passages, propose ~12 candidates | free, local |
@@ -125,7 +184,13 @@ music  -> volume -> sidechaincompress(key=voice)
 
 ```bash
 # steer the editor
---direction "favour grooming transformations, skip anything about pricing"
+--direction "favour the car chases, skip the sponsor read"
+
+# from a link
+--cookies-from-browser chrome      # age-gated or sign-in-walled videos
+--max-height 1080                  # cap the download resolution
+--no-yt-subs                       # ignore the site's captions, transcribe locally
+--download-dir ./sources           # where fetched videos are kept
 
 # sound
 --sfx-mode full|structural|off     # structural = build+hit only
