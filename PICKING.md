@@ -69,6 +69,17 @@ No ALL CAPS, no emoji in the title, no "you won't believe". If the fact is
 interesting the plain sentence is the strongest version of it. Keep it under
 about 70 characters so it is not cut off.
 
+**Never open with a bare pronoun** — *He finished GTA 6*, *They found a bug*,
+*This changes everything*. The viewer has not met anyone yet, so the sentence
+refers to nobody. Name the subject, or state the claim itself:
+
+| | |
+|---|---|
+| ~~He finished GTA 6. Here's his verdict.~~ | GTA 6 is worth most of the hype |
+| ~~They can tell what you were wearing~~ | GTA 6 police can describe what you wore |
+
+The same goes for the first line of a description when it has to stand alone.
+
 Write the description as one or two sentences that add what the title left
 out — not a restatement of it.
 
