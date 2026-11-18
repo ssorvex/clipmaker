@@ -20,6 +20,7 @@ param(
     [double]$MaxLen = 60,
     [string]$Out = "",
     [string]$Direction = "",
+    [string]$Plan = "",
     [string]$Cookies = "",
     [ValidateSet("blur", "fill", "pad")][string]$Crop = "fill",
     [switch]$NoSound,
@@ -42,13 +43,14 @@ $cmd = @(
     "--max-len", $MaxLen
 )
 
-if (-not $env:ANTHROPIC_API_KEY -and -not $env:ANTHROPIC_AUTH_TOKEN) {
+if (-not $Plan -and -not $env:ANTHROPIC_API_KEY -and -not $env:ANTHROPIC_AUTH_TOKEN) {
     Write-Host "No ANTHROPIC_API_KEY set - running the local planner (--no-llm)." -ForegroundColor Yellow
     Write-Host "Clips still get captions and the build-and-hit sound bed." -ForegroundColor Yellow
     $cmd += "--no-llm"
 }
 
 if ($Direction)  { $cmd += @("--direction", $Direction) }
+if ($Plan)       { $cmd += @("--plan", $Plan) }
 if ($Crop)       { $cmd += @("--crop", $Crop) }
 if ($Cookies)    { $cmd += @("--cookies-from-browser", $Cookies) }
 if ($NoSound)    { $cmd += @("--sfx-mode", "off") }
