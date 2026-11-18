@@ -499,8 +499,10 @@ def build_parser() -> argparse.ArgumentParser:
     g = m.add_argument_group("transcription")
     g.add_argument("--whisper-model", default="small",
                    help="tiny|base|small|medium|large-v3 (bigger = better, slower)")
-    g.add_argument("--whisper-device", default="cpu", help="cpu|cuda")
-    g.add_argument("--whisper-compute", default="int8", help="int8|float16|float32")
+    g.add_argument("--whisper-device", default="auto",
+                   help="auto|cpu|cuda — auto uses the GPU when there is one")
+    g.add_argument("--whisper-compute", default="auto",
+                   help="auto|int8|float16|float32 — auto picks per device")
     g.add_argument("--language", default=None, help="force a language code, e.g. en")
     g.add_argument("--no-asr", action="store_true",
                    help="skip transcription (no captions, weaker clip choices)")

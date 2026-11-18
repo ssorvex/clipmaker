@@ -118,6 +118,26 @@ def _pick_sub_language(info: dict, language: str | None) -> tuple[str, bool]:
     return "", False
 
 
+def _id_from_url(url: str) -> str:
+    """Best-effort video id without asking the network.
+
+    Only needed when the metadata call fails: a source already on disk should
+    not become unusable because YouTube decided today is a sign-in day.
+    """
+    parsed = urlparse(str(url))
+    host = parsed.netloc.lower()
+    if "youtu.be" in host:
+        return parsed.path.strip("/").split("/")[0]
+    if "youtube" in host:
+        for part in parsed.query.split("&"):
+            if part.startswith("v="):
+                return part[2:]
+        bits = [b for b in parsed.path.split("/") if b]
+        if len(bits) >= 2 and bits[0] in ("shorts", "live", "embed"):
+            return bits[1]
+    return ""
+
+
 def _find_video(cache_dir: Path, video_id: str) -> Path | None:
     for suffix in VIDEO_SUFFIXES:
         hit = cache_dir / f"{video_id}{suffix}"
@@ -214,7 +234,20 @@ def fetch(url: str, cache_dir: Path, *, max_height: int = 1080,
     cache_dir = Path(cache_dir).expanduser().resolve()
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    info = _info(cmd, url, cookies_from_browser)
+    try:
+        info = _info(cmd, url, cookies_from_browser)
+    except ToolError:
+        # A source already on disk should not become unusable because the site
+        # decided today is a sign-in day. If the id is recoverable from the URL
+        # and the file is here, the network's opinion does not matter.
+        guess = _id_from_url(url)
+        if guess and _find_video(cache_dir, guess) is not None:
+            print(f"      ! metadata unavailable; using the cached copy of {guess}",
+                  flush=True)
+            info = {"id": guess, "title": guess}
+        else:
+            raise
+
     if info.get("_type") == "playlist":
         raise ToolError(
             "that link is a playlist or channel, not one video — "

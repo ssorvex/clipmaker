@@ -6,6 +6,9 @@ what makes word-accurate burned captions possible.
 """
 from __future__ import annotations
 
+import glob
+import os
+import sysconfig
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -97,14 +100,65 @@ def extract_audio(video: Path | str, dest: Path) -> Path:
     return dest
 
 
+def _enable_cuda_dlls() -> None:
+    """Put the pip-installed CUDA libraries where Windows' loader can see them.
+
+    CTranslate2 loads cublas and cudnn through the OS loader, which does not
+    consult `os.add_dll_directory`, so the DLLs shipped in the `nvidia-*`
+    wheels stay invisible to it unless they are on PATH. Without this the GPU
+    path fails with "cublas64_12.dll is not found" even though the file is
+    sitting in site-packages.
+    """
+    if os.name != "nt":
+        return
+    site = sysconfig.get_paths()["purelib"]
+    dirs = [d for d in glob.glob(os.path.join(site, "nvidia", "*", "bin"))
+            if os.path.isdir(d)]
+    if dirs:
+        os.environ["PATH"] = os.pathsep.join(dirs) + os.pathsep + os.environ.get("PATH", "")
+
+
+def _load_model(model_size: str, device: str, compute_type: str):
+    """Load Whisper on the GPU when there is one, and say so when there isn't.
+
+    Worth the trouble: on a current card this runs around 39x faster than
+    real time against 3x on the CPU, which is the difference between a
+    six-hour stream taking nine minutes and taking two hours.
+    """
+    from faster_whisper import WhisperModel
+
+    _enable_cuda_dlls()
+    wanted = device
+    if device == "auto":
+        try:
+            import ctranslate2
+            wanted = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+        except Exception:
+            wanted = "cpu"
+
+    compute = compute_type
+    if compute_type == "auto":
+        compute = "float16" if wanted == "cuda" else "int8"
+
+    try:
+        return WhisperModel(model_size, device=wanted, compute_type=compute), wanted
+    except Exception as exc:
+        if wanted != "cuda":
+            raise
+        # A card can be present and still unusable: missing libraries, a driver
+        # too old, or an architecture this build has no kernels for.
+        print(f"      ! GPU unavailable ({str(exc)[:90]}); using the CPU", flush=True)
+        return WhisperModel(model_size, device="cpu", compute_type="int8"), "cpu"
+
+
 def transcribe(
     video: Path | str,
     work_dir: Path,
     *,
     model_size: str = "small",
     language: str | None = None,
-    compute_type: str = "int8",
-    device: str = "cpu",
+    compute_type: str = "auto",
+    device: str = "auto",
     vad: bool = True,
 ) -> Transcript:
     """Transcribe with word timestamps, caching the result in work_dir.
@@ -134,7 +188,8 @@ def transcribe(
         ) from exc
 
     audio = extract_audio(video, work_dir / f"audio_{cache_key}.wav")
-    model = WhisperModel(model_size, device=device, compute_type=compute_type)
+    model, used = _load_model(model_size, device, compute_type)
+    print(f"      whisper '{model_size}' on {used}", flush=True)
     segments, info = model.transcribe(
         str(audio),
         language=language,
