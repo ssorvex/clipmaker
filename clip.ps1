@@ -16,6 +16,7 @@ param(
     [string]$Out = "",
     [string]$Direction = "",
     [string]$Cookies = "",
+    [ValidateSet("", "blur", "fill", "pad")][string]$Crop = "",
     [switch]$NoSound,
     [switch]$NoCaptions
 )
@@ -43,6 +44,7 @@ if (-not $env:ANTHROPIC_API_KEY -and -not $env:ANTHROPIC_AUTH_TOKEN) {
 }
 
 if ($Direction)  { $cmd += @("--direction", $Direction) }
+if ($Crop)       { $cmd += @("--crop", $Crop) }
 if ($Cookies)    { $cmd += @("--cookies-from-browser", $Cookies) }
 if ($NoSound)    { $cmd += @("--sfx-mode", "off") }
 if ($NoCaptions) { $cmd += "--no-captions" }
