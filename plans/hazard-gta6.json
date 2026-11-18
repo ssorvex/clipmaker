@@ -1,0 +1,58 @@
+{
+  "_source": "https://www.youtube.com/watch?v=jwwDSn-HW0o",
+  "_note": "Editorial pass done in chat: moments, titles and cue sheet chosen by reading the transcript. Cue times are relative to each clip's own start.",
+  "clips": [
+    {
+      "start": 142.59,
+      "end": 198.69,
+      "title": "Rockstar hired a real cartel smuggler to research GTA 6",
+      "hook": "Their contact hooked them up with a smuggler who knew Pablo Escobar.",
+      "description": "To get Vice City right, Rockstar's researcher sat down with a man who built submarines for Colombian cartels in the 70s - the same consultant they used for the Cayo Perico heist. He'd been kidnapped by the cartel himself.",
+      "hashtags": ["GTA6", "GTA6News", "RockstarGames", "ViceCity", "PabloEscobar"],
+      "why": "The strongest story in the video and the only one that is genuinely surprising. Self-contained, has a concrete image (drug submarines) and a dark payoff that lands inside a minute.",
+      "emphasis_words": ["Escobar", "submarines", "kidnapped", "pieces"],
+      "sfx_cues": [
+        {"t": 2.4,  "kind": "riser",    "intensity": "normal", "reason": "build into the Escobar reveal"},
+        {"t": 3.6,  "kind": "impact",   "intensity": "strong", "reason": "'knew Pablo Escobar' lands"},
+        {"t": 27.1, "kind": "reveal",   "intensity": "normal", "reason": "the drug submarines detail"},
+        {"t": 37.8, "kind": "suspense", "intensity": "normal", "reason": "build into the kidnapping"},
+        {"t": 38.9, "kind": "impact",   "intensity": "strong", "reason": "'he was kidnapped by cartel members'"},
+        {"t": 53.6, "kind": "boom",     "intensity": "strong", "reason": "the payoff: 'in many tiny pieces'"}
+      ]
+    },
+    {
+      "start": 621.0,
+      "end": 665.1,
+      "title": "You can read a GTA 6 code through the case with a flashlight",
+      "hook": "There's an even easier way to get GTA 6 for free.",
+      "description": "Whoever printed the physical cases embedded the code in the back of the case instead of on a card. Shine a light through the plastic, write down the code, return the box. Some buyers are already receiving cases with codes that have been used.",
+      "hashtags": ["GTA6", "GTA6News", "RockstarGames", "Gaming", "PS5"],
+      "why": "The most shareable thing in the video: a real exploit, explained in one sentence, with a twist ending that makes it news rather than a tip.",
+      "emphasis_words": ["flashlight", "free", "used", "shelves"],
+      "sfx_cues": [
+        {"t": 3.2,  "kind": "riser",          "intensity": "normal", "reason": "build into the method"},
+        {"t": 4.4,  "kind": "impact",         "intensity": "strong", "reason": "'shine a flashlight through' lands"},
+        {"t": 31.8, "kind": "suspense",       "intensity": "normal", "reason": "build into the twist"},
+        {"t": 33.0, "kind": "record_scratch", "intensity": "strong", "reason": "the turn: boxes arriving with no code at all"}
+      ]
+    },
+    {
+      "start": 470.39,
+      "end": 523.8,
+      "title": "GTA 6 made $1.5 billion before anyone played it",
+      "hook": "Pre-order numbers beating GTA 5 and Cyberpunk combined.",
+      "description": "Sensor Tower estimates 14.94 million copies pre-sold, about $1.5 billion, three quarters of it on PlayStation 5 - enough to cover most of the development budget before launch day.",
+      "hashtags": ["GTA6", "GTA6News", "RockstarGames", "PS5", "Gaming"],
+      "why": "Numbers travel. Three concrete figures in under a minute, each bigger than the last, ending on the $2 billion launch-week projection.",
+      "emphasis_words": ["billion", "14.94", "million", "combined"],
+      "sfx_cues": [
+        {"t": 1.0,  "kind": "riser",   "intensity": "normal", "reason": "build into the hook"},
+        {"t": 2.2,  "kind": "impact",  "intensity": "strong", "reason": "'off the charts' lands"},
+        {"t": 11.7, "kind": "tick_up", "intensity": "normal", "reason": "build into the revenue figure"},
+        {"t": 12.9, "kind": "ding",    "intensity": "strong", "reason": "$1.5 billion"},
+        {"t": 16.5, "kind": "ding",    "intensity": "normal", "reason": "14.94 million copies"},
+        {"t": 48.5, "kind": "boom",    "intensity": "strong", "reason": "the $2 billion launch-week projection"}
+      ]
+    }
+  ]
+}

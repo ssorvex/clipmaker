@@ -233,6 +233,8 @@ def from_json3(path: Path | str, *, language: str = "") -> Transcript:
     on every run.
     """
     path = Path(path)
+    if not path.is_file():
+        raise ToolError(f"no such caption file: {path}")
     data = read_json(path)
     if not isinstance(data, dict) or "events" not in data:
         raise ToolError(f"{path.name} is not a json3 caption file")

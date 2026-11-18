@@ -191,7 +191,13 @@ def cmd_make(args: argparse.Namespace) -> int:
     # 4. direct
     step(4, total, "choosing and designing clips ...")
     usage: dict = {}
-    if args.no_llm:
+    if args.plan:
+        plans = director.plan_from_file(
+            args.plan, cands, transcript,
+            min_len=args.min_len, max_len=args.max_len, source_duration=pr.duration,
+        )
+        log(f"      {len(plans)} clips read from {Path(args.plan).name} (no model call)")
+    elif args.no_llm:
         plans = director.heuristic_plan(
             cands, transcript, n_clips=args.clips,
             min_len=args.min_len, max_len=args.max_len,
@@ -410,6 +416,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--model", default=director.DEFAULT_MODEL, help="Claude model id")
     g.add_argument("--effort", default="high",
                    choices=["low", "medium", "high", "xhigh", "max"])
+    g.add_argument("--plan", default="",
+                   help="cut the clips named in a JSON plan instead of choosing "
+                        "them: the editorial pass done elsewhere, no model call")
     g.add_argument("--no-llm", action="store_true",
                    help="skip the model entirely; use the heuristic planner")
     g.add_argument("--vision", action="store_true", default=True,

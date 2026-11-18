@@ -363,6 +363,77 @@ def _plans_from_payload(
 
 # --- no-API path ----------------------------------------------------------
 
+def plan_from_file(
+    path: Path | str,
+    candidates: list[Candidate],
+    transcript: Transcript,
+    *,
+    min_len: float,
+    max_len: float,
+    source_duration: float,
+) -> list[ClipPlan]:
+    """Load a clip plan written somewhere other than an API call.
+
+    The director's job is editorial taste, and taste does not have to arrive
+    over the wire: a person reading the shortlist, or a Claude session that
+    already has the transcript in front of it, can write the same JSON. It is
+    parsed by the same code that reads the model's reply — including the trim
+    and bounds checks — so nothing downstream can tell the difference.
+
+    Three shapes are accepted: a bare list of clips, `{"clips": [...]}`, or a
+    `plan.json` this tool wrote earlier, so a finished run can be re-cut by
+    editing its own output.
+    """
+    path = Path(path)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise ToolError(f"no such plan file: {path}") from None
+    except json.JSONDecodeError as exc:
+        raise ToolError(f"{path.name} is not valid JSON: {exc}") from None
+
+    if isinstance(raw, list):
+        clips = raw
+    elif isinstance(raw, dict) and raw.get("clips"):
+        clips = raw["clips"]
+    elif isinstance(raw, dict) and raw.get("clips_out"):
+        clips = [c.get("plan", {}) for c in raw["clips_out"]]
+    else:
+        raise ToolError(
+            f'{path.name} holds no clips. Expected a list, {{"clips": [...]}}, '
+            "or a plan.json written by an earlier run."
+        )
+
+    # plan.json spells two fields differently from the model's reply, because
+    # one is output and the other input. Accept either.
+    payload: list[dict[str, Any]] = []
+    for i, clip in enumerate(clips, 1):
+        if not isinstance(clip, dict):
+            raise ToolError(f"{path.name}: clip {i} is not an object")
+        clip = dict(clip)
+        if "emphasis" in clip and "emphasis_words" not in clip:
+            clip["emphasis_words"] = clip.pop("emphasis")
+        if "cues" in clip and "sfx_cues" not in clip:
+            clip["sfx_cues"] = clip.pop("cues")
+        if clip.get("start") is None or clip.get("end") is None:
+            raise ToolError(f"{path.name}: clip {i} needs both a start and an end")
+        payload.append(clip)
+
+    plans = _plans_from_payload(
+        {"clips": payload}, candidates,
+        min_len=min_len, max_len=max_len, source_duration=source_duration,
+    )
+
+    # A plan may name the moments and say nothing about sound. Those clips get
+    # the structural bed the no-API path uses, rather than silence.
+    for plan in plans:
+        if not plan.cues:
+            first_word, breaks = structural_context(transcript, plan.start, plan.end)
+            plan.cues = default_cues(plan.duration, first_word_at=first_word,
+                                     sentence_breaks=breaks)
+    return plans
+
+
 def heuristic_plan(
     candidates: list[Candidate],
     transcript: Transcript,
