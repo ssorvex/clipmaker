@@ -12,7 +12,9 @@ file on disk instead of pulling it again.
 """
 from __future__ import annotations
 
+import glob
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -47,7 +49,28 @@ class Fetched:
     cached: bool
 
 
+def _ensure_js_runtime() -> None:
+    """Make Deno reachable, since yt-dlp now needs it for YouTube.
+
+    Extraction without a JavaScript runtime is deprecated and already drops
+    formats. Deno installed through winget only lands on PATH for shells
+    started afterwards, which a long-running app and its scheduled runs are
+    not — so find it ourselves rather than depend on a restart.
+    """
+    if shutil.which("deno"):
+        return
+    local = os.environ.get("LOCALAPPDATA", "")
+    if not local:
+        return
+    pattern = os.path.join(local, "Microsoft", "WinGet", "Packages",
+                           "DenoLand.Deno_*", "deno.exe")
+    for hit in glob.glob(pattern):
+        os.environ["PATH"] = os.path.dirname(hit) + os.pathsep + os.environ.get("PATH", "")
+        return
+
+
 def _ytdlp() -> list[str]:
+    _ensure_js_runtime()
     exe = shutil.which("yt-dlp")
     if exe:
         return [exe]
