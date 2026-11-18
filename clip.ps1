@@ -24,7 +24,8 @@ param(
     [string]$Cookies = "",
     [ValidateSet("blur", "fill", "pad")][string]$Crop = "fill",
     [switch]$NoSound,
-    [switch]$NoCaptions
+    [switch]$NoCaptions,
+    [switch]$NoPhone
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,5 +68,15 @@ if ($code -eq 0) {
     Write-Host ""
     Write-Host "Done. Clips, meta.json and youtube.md are in:" -ForegroundColor Green
     Write-Host "  $Out" -ForegroundColor Green
+
+    # Copy them where the phone can reach them. A failure here is not worth
+    # losing a finished render over, so it only warns.
+    if (-not $NoPhone) {
+        try {
+            & (Join-Path $here "publish.ps1") -From $Out
+        } catch {
+            Write-Host "  (could not copy to the phone folder: $_)" -ForegroundColor Yellow
+        }
+    }
 }
 exit $code
