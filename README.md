@@ -11,13 +11,20 @@ python clipmaker.py make long-video.mp4 --clips 5 --out ./clips
 python clipmaker.py make "https://youtu.be/XXXXXXXX" --min-len 30 --max-len 60
 ```
 
-The source can be a file or a link. On Windows there is a wrapper that fixes
-the shorts-shaped defaults — 5 clips, 30–60 seconds, captions, sound design:
+The source can be a file or a link. On Windows there is a wrapper holding the
+shorts-shaped defaults — 5 clips, 30–60 seconds, captions, sound design, and
+the picture cropped to fill the vertical frame:
 
 ```powershell
 .\clip.ps1 https://youtu.be/XXXXXXXX
 .\clip.ps1 https://youtu.be/XXXXXXXX -Clips 3 -MaxLen 45
+.\clip.ps1 https://youtu.be/XXXXXXXX -Crop blur     # never cuts the sides
 ```
+
+Filling is the right default for gameplay and cinematic footage, which keeps
+its action centred — and especially for a letterboxed source, where the blurred
+framing puts an already-barred picture into a thin strip. `-Crop blur` is there
+for anything with a subject drifting off to one side.
 
 You get, per clip: a 1080×1920 MP4 with burned captions and placed sound
 effects, normalised to −14 LUFS (YouTube's target), plus a `meta.json`, and one

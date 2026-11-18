@@ -5,7 +5,12 @@
         .\clip.ps1 https://youtu.be/XXXXXXXX -Clips 3 -MaxLen 45
         .\clip.ps1 <url> -Direction "skip the intro, favour the car chases"
 
-    Defaults to 5 clips of 30-60 seconds with captions and sound design.
+    Defaults to 5 clips of 30-60 seconds with captions and sound design,
+    cropped to fill the vertical frame. Gameplay and cinematic footage keeps
+    its action centred, so filling beats the blurred-bars framing — but a
+    letterboxed source with someone standing off to one side can lose them,
+    and -Crop blur never cuts anything.
+
     Output lands in clips\<date_time>\ unless -Out says otherwise.
 #>
 param(
@@ -16,7 +21,7 @@ param(
     [string]$Out = "",
     [string]$Direction = "",
     [string]$Cookies = "",
-    [ValidateSet("", "blur", "fill", "pad")][string]$Crop = "",
+    [ValidateSet("blur", "fill", "pad")][string]$Crop = "fill",
     [switch]$NoSound,
     [switch]$NoCaptions
 )
