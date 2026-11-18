@@ -1,0 +1,16 @@
+# clipmaker dependencies
+#
+# ffmpeg and ffprobe must also be on PATH (brew install ffmpeg / apt install ffmpeg).
+#
+# numpy is the only hard requirement — with just numpy + ffmpeg the tool runs
+# end to end using the heuristic planner and synthesised sound effects.
+
+numpy>=1.24
+
+# Word-level transcription. Needed for captions, for speech-gap cue placement,
+# and for the model to read what was actually said. Downloads a model on first
+# run (~500 MB for "small").
+faster-whisper>=1.0
+
+# Only needed without --no-llm, i.e. for the clip-selection / sound-design pass.
+anthropic>=2.0
