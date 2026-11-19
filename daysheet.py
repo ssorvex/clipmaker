@@ -122,7 +122,8 @@ def block(clip: dict, dest_dir: Path, when: str) -> str:
     return "\n".join([
         "### VIDEO %d" % clip["n"],
         "",
-        "**Link :** [%s](%s)" % (video.name, link),
+        "**Link :** [%s](%s)  ·  [klasörü aç](%s)" % (
+            video.name, link, dest_dir.as_uri() + "/"),
         "**Posting Time :** %s" % when,
         "**Süre :** %d sn  ·  kaynakta %s" % (clip["duration"], _clock(clip["start"])),
         "",
@@ -184,7 +185,7 @@ def build(clips_dir: Path, dest_dir: Path, times: list[str]) -> tuple[Path, int]
         "**Kaynak :** %s" % (source.get("source") or "?"),
         "**Video :** %s%s" % (source.get("title") or "?",
                               (" — " + source["uploader"]) if source.get("uploader") else ""),
-        "**Klasör :** `%s`" % dest_dir,
+        "**Klasör :** [%s](%s)" % (dest_dir, dest_dir.as_uri() + "/"),
         "",
         "---",
         "",
