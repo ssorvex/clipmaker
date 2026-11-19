@@ -85,6 +85,18 @@ Write-Host ""
 Write-Host "  $i clip(s) + POST.txt ready to upload:" -ForegroundColor Green
 Write-Host "  $dest"
 
+# The Obsidian sheet: the same three clips written out as something to work
+# down and paste. Best effort -- a vault that is missing or moved must not
+# cost us the copied clips.
+$sheet = Join-Path $root "daysheet.py"
+if (Test-Path $sheet) {
+    try {
+        & python $sheet $From $dest --times @Times
+    } catch {
+        Write-Host "  (could not write the Obsidian sheet: $_)" -ForegroundColor Yellow
+    }
+}
+
 if ($Keep -gt 0) {
     $old = Get-ChildItem $To -Directory | Sort-Object Name -Descending | Select-Object -Skip $Keep
     foreach ($o in $old) {
