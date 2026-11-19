@@ -83,6 +83,51 @@ The same goes for the first line of a description when it has to stand alone.
 Write the description as one or two sentences that add what the title left
 out — not a restatement of it.
 
+## Keywords and tags
+
+A title is not a label, it is a search someone might type. Every word should
+earn its place: take one out, and either the meaning breaks or the search
+value drops. If neither happens, the word was filler.
+
+Every title carries two things:
+
+1. **The anchor** -- `GTA 6`, as early as the sentence allows. It is what
+   people actually type.
+2. **A topic noun people search for.** Not a feeling, a thing:
+
+   > police - money - map - cheats - secrets - tips - mission - car -
+   > wanted level - review - Lucia - Jason - Leonida
+
+| Weak | Why | Stronger |
+|---|---|---|
+| GTA 6 is worth most of the hype | "worth the hype" is not a search | GTA 6 review: is it worth the hype |
+| 62 hours in, and he says GTA 6 isn't the greatest | the anchor arrives last | GTA 6 after 62 hours: not the greatest game ever |
+| GTA 6 police can describe what you wore | nothing wrong | already right: anchor, then police |
+
+**YouTube reads the audio.** It indexes what is said in the clip, not only
+what we type around it. So when two moments are equally good, take the one
+where the keyword is actually spoken -- a clip where someone says *police*
+out loud earns that search in a way a typed title alone does not.
+
+### Tags
+
+Instagram allows **five**, and that cap is the real constraint. Three stay
+fixed so results remain comparable between posts; two change with the clip.
+
+| | |
+|---|---|
+| **Fixed, never change** | `#GTA6` `#GTAVI` `#RockstarGames` |
+| **Varies with the clip, pick two** | `#GTA6Tips` `#GTA6Review` `#GTA6Police` `#GTA6Money` `#GTA6Secrets` `#GTA6Gameplay` `#Leonida` `#GTA5` |
+
+YouTube: the same five in the description, plus `#Shorts`.
+
+Never use `#fyp` `#viral` `#explore` `#reels` `#foryou`. They match no real
+search, and both platforms discount them.
+
+Tags do not add reach. They only help a post *match* a search, and the
+caption's own words do most of that -- so the description is worth more
+thought than the tag list.
+
 ## Sound
 
 Place cues on **structure**, never on a random word.
