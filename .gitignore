@@ -10,3 +10,10 @@ sfx_library/*/
 queue.txt
 done.txt
 plans/
+
+# videos dropped in for processing
+inbox/*
+!inbox/README.txt
+
+# generated music beds
+music/

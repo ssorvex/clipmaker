@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cm import candidates as cand_mod
 from cm import captions as cap_mod
 from cm import fetch as fetch_mod
+from cm import music as music_mod
 from cm import cueplan, director, probe as probe_mod, render as render_mod, sfx as sfx_mod
 from cm import transcribe as asr_mod
 from cm.util import ToolError, fmt_timecode, require, slugify, write_json
@@ -198,6 +199,36 @@ def prepare(args: argparse.Namespace, work_dir: Path, *, total: int) -> Prepared
                     candidates=cands, fetched=fetched, work_dir=work_dir)
 
 
+def _unused_window(plans, index: int, duration: float, need: float) -> float:
+    """Where in the source to take picture from, avoiding every clip's own window.
+
+    Showing a clip the footage it is already showing would be pointless, and
+    showing it another clip's footage makes three posts look like one. So the
+    gaps between the chosen moments are divided up, longest first, and each
+    clip takes a different one.
+    """
+    taken = sorted((p.start, p.end) for p in plans)
+    gaps: list[tuple[float, float]] = []
+    edge = 0.0
+    for start, end in taken:
+        if start - edge >= need:
+            gaps.append((edge, start))
+        edge = max(edge, end)
+    if duration - edge >= need:
+        gaps.append((edge, duration))
+
+    if not gaps:
+        # Nothing is free: fall back to the far end of the source, which is at
+        # least not the moment being played.
+        return max(0.0, duration - need)
+
+    gaps.sort(key=lambda g: g[1] - g[0], reverse=True)
+    start, end = gaps[index % len(gaps)]
+    room = (end - start) - need
+    # A little way in, so a cut on the gap's edge is not the first thing shown.
+    return start + min(room, 2.0 + (index * 11.0) % max(room, 0.001))
+
+
 def _write_dossier(prep: Prepared, out_dir: Path, source: str) -> int:
     """Write what is needed to pick clips, and stop before rendering any.
 
@@ -333,8 +364,41 @@ def cmd_make(args: argparse.Namespace) -> int:
     spec = render_mod.RenderSpec(
         width=args.width, height=args.height, fps=args.fps,
         crop_mode=args.crop, crf=args.crf, preset=args.x264_preset,
+        music_db=args.music_db,
     )
-    music = Path(args.music).expanduser().resolve() if args.music else None
+    # --music takes either a file or the name of a mood to compose. A composed
+    # bed is written per clip, to that clip's own length, so it can have an
+    # arc instead of looping eight bars under a minute of speech.
+    broll: Path | None = None
+    broll_len = 0.0
+    broll_self = args.broll == "self"
+    if broll_self:
+        # The parts of this very video that no clip is using. Nothing to
+        # download, nothing to colour-match, and no second licence to worry
+        # about -- a review already cuts between the presenter and the game,
+        # so the footage we want is sitting in the file we have.
+        broll, broll_len = source, pr.duration
+        log("      picture from the unused parts of the source")
+    elif args.broll:
+        if fetch_mod.is_url(args.broll):
+            log(f"[b-roll] {args.broll}")
+            cache = Path(args.download_dir).expanduser().resolve()                 if args.download_dir else Path(__file__).parent / ".downloads"
+            got = fetch_mod.fetch(args.broll, cache, max_height=args.max_height,
+                                  want_subs=False,
+                                  cookies_from_browser=args.cookies_from_browser)
+            broll, broll_len = got.video, got.duration
+            log(f"      {got.title}  ({got.duration / 60:.1f} min)")
+        else:
+            broll = Path(args.broll).expanduser().resolve()
+            if not broll.is_file():
+                raise ToolError(f"no such b-roll file: {broll}")
+            broll_len = probe_mod.probe(broll).duration
+        log(f"      picture from the b-roll, sound from the source")
+
+    composed = args.music in music_mod.MOOD_NAMES
+    music = None if composed or not args.music else         Path(args.music).expanduser().resolve()
+    if composed:
+        log(f"      composing a '{args.music}' bed per clip")
     results: list[dict] = []
 
     for i, plan in enumerate(plans, 1):
@@ -359,11 +423,30 @@ def cmd_make(args: argparse.Namespace) -> int:
                 emphasis=plan.emphasis, uppercase=not args.caption_mixed_case,
             ))
 
+        clip_music = music
+        if composed:
+            clip_music = music_mod.render_bed(
+                clip_dir / ".bed.wav", plan.end - plan.start,
+                mood=args.music, seed=i,
+            )
+
+        # Spread the clips across the b-roll so three in a row are not three
+        # views of the same ten seconds.
+        broll_at = args.broll_start
+        need = plan.end - plan.start
+        if broll is not None and broll_at < 0:
+            if broll_self:
+                broll_at = _unused_window(plans, i, broll_len, need)
+            else:
+                room = max(0.0, broll_len - need)
+                broll_at = (i * 17.0) % room if room > 1.0 else 0.0
+
         dest = clip_dir / "clip.mp4"
         render_mod.render_clip(
             source, dest, start=plan.start, end=plan.end,
             cues_with_files=cues_with_files, spec=spec,
-            ass_path=ass_path, music=music, has_audio=pr.has_audio,
+            ass_path=ass_path, music=clip_music, has_audio=pr.has_audio,
+            broll=broll, broll_start=max(0.0, broll_at),
         )
         loud = render_mod.measure_loudness(dest)
         info = render_mod.probe_output(dest)
@@ -522,7 +605,18 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--sfx-density", type=float, default=4.0,
                    help="roughly one cue per this many seconds")
     g.add_argument("--sfx-max", type=int, default=10, help="hard cap on cues per clip")
-    g.add_argument("--music", default="", help="optional music bed, ducked under speech")
+    g.add_argument("--music", default="",
+                   help="a wav/mp3 to use as the bed, or a mood to compose one: "
+                        + ", ".join(music_mod.MOOD_NAMES))
+    g.add_argument("--music-db", type=float, default=-26.0,
+                   help="music bed level before ducking (default -26, felt not heard)")
+    g.add_argument("--broll", default="",
+                   help="take the picture from this file or link and keep only the "
+                        "sound of the source: a talking head becomes watchable. "
+                        "'self' uses the parts of the source the clips do not use")
+    g.add_argument("--broll-start", type=float, default=-1.0,
+                   help="seconds into the b-roll to start (default: spread the "
+                        "clips across it)")
 
     g = m.add_argument_group("output")
     g.add_argument("--width", type=int, default=1080)

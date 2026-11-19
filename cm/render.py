@@ -80,15 +80,22 @@ def _audio_graph(
     music: Path | None,
     spec: RenderSpec,
     first_input_index: int,
+    voice_input: int = 0,
 ) -> tuple[str, str]:
-    """Build the audio half of the filter_complex. Returns (graph, out_label)."""
+    """Build the audio half of the filter_complex. Returns (graph, out_label).
+
+    `voice_input` is which input carries the speech. It is input 0 normally and
+    input 1 when a b-roll clip has taken the front of the input list to supply
+    the picture.
+    """
     parts: list[str] = []
     mix_labels: list[str] = []
 
     if has_audio:
         # highpass clears rumble; speechnorm evens out a presenter who drifts
         # off-mic without the pumping a compressor would add.
-        parts.append("[0:a]highpass=f=85,speechnorm=e=6.25:r=0.0005:l=1[voice]")
+        parts.append(f"[{voice_input}:a]highpass=f=85,"
+                     "speechnorm=e=6.25:r=0.0005:l=1[voice]")
         voice_label = "[voice]"
     else:
         parts.append(f"anullsrc=channel_layout=stereo:sample_rate=48000[voice]")
@@ -118,6 +125,13 @@ def _audio_graph(
         mix_labels.append("[sfxbus]")
 
     if music is not None:
+        # The voice is wanted twice: once in the mix and once as the key that
+        # ducks the music. A filter label can only be consumed once, so it has
+        # to be split explicitly. Without this ffmpeg silently produces a
+        # different mix -- which it did, several decibels quiet, as soon as a
+        # b-roll input changed the order the graph was resolved in.
+        parts.append(f"{voice_label}asplit=2[voicemix][voicekey]")
+        voice_label = "[voicemix]"
         parts.append(
             f"[{idx}:a]aformat=sample_fmts=fltp:sample_rates=48000:"
             f"channel_layouts=stereo,volume={spec.music_db:.1f}dB,"
@@ -125,7 +139,7 @@ def _audio_graph(
         )
         # Duck the bed under the voice rather than riding a fixed level.
         parts.append(
-            "[musicraw][voice]sidechaincompress=threshold=0.03:ratio=12:"
+            "[musicraw][voicekey]sidechaincompress=threshold=0.03:ratio=12:"
             "attack=15:release=320:makeup=1[musicduck]"
         )
         mix_labels.append("[musicduck]")
@@ -231,8 +245,16 @@ def render_clip(
     ass_path: Path | None = None,
     music: Path | None = None,
     has_audio: bool = True,
+    broll: Path | None = None,
+    broll_start: float = 0.0,
 ) -> Path:
-    """Cut, reframe, caption, mix and normalise one clip."""
+    """Cut, reframe, caption, mix and normalise one clip.
+
+    With `broll`, the picture comes from that file and only the sound comes
+    from `source` -- which is how a piece of commentary becomes a watchable
+    clip rather than a person talking at a camera. The b-roll is looped, so a
+    source shorter than the clip repeats instead of running out.
+    """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     duration = max(0.5, end - start)
@@ -244,6 +266,15 @@ def render_clip(
     )
 
     args: list[str] = []
+    voice_input = 0
+    if broll is not None:
+        # The picture, first in the list so it stays [0:v]. Looped, and not
+        # given -t: the output duration and -shortest end the clip.
+        args += ["-stream_loop", "-1",
+                 "-ss", f"{max(0.0, broll_start):.3f}", "-accurate_seek",
+                 "-i", str(broll)]
+        voice_input = 1
+
     # Seek before -i for speed, but keep it accurate; re-encoding anyway.
     args += ["-ss", f"{max(0.0, start):.3f}", "-t", f"{duration:.3f}",
              "-accurate_seek", "-i", str(source)]
@@ -256,7 +287,7 @@ def render_clip(
     video_chain = _video_chain(spec, ass_path=ass_path)
     audio_graph, mastered = _audio_graph(
         cues_with_files, has_audio=has_audio, music=music, spec=spec,
-        first_input_index=1,
+        first_input_index=voice_input + 1, voice_input=voice_input,
     )
     audio_graph += f";{mastered}{_loudnorm_args(measured)},aresample=48000[aout]"
     graph = f"[0:v]{video_chain}[vout];{audio_graph}"
