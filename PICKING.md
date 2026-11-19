@@ -117,7 +117,7 @@ fixed so results remain comparable between posts; two change with the clip.
 | | |
 |---|---|
 | **Fixed, never change** | `#GTA6` `#GTAVI` `#RockstarGames` |
-| **Varies with the clip, pick two** | `#GTA6Tips` `#GTA6Review` `#GTA6Police` `#GTA6Money` `#GTA6Secrets` `#GTA6Gameplay` `#Leonida` `#GTA5` |
+| **Varies with the clip, pick two** | `#GTA6Tips` `#GTA6Review` `#GTA6Police` `#GTA6Money` `#GTA6Secrets` `#GTA6Gameplay` `#Leonida` `#GTA5` `#GTA6PC` `#PCGaming` |
 
 YouTube: the same five in the description, plus `#Shorts`.
 
