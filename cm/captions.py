@@ -95,6 +95,12 @@ def build_ass(
 ) -> str:
     """Render an ASS file covering one clip, timed relative to the clip start."""
     preset = STYLE_PRESETS.get(style, STYLE_PRESETS["bold-white"])
+    # How many characters actually fit on one line, rather than a number that
+    # happened to look right at some other size. A heavy upper-case face runs
+    # about 0.62 of its point size per glyph, and the style keeps 60px either
+    # side. Cards longer than this used to run off both edges of the frame.
+    side = 60
+    fits = int((width - 2 * side) / (float(preset["size"]) * 0.62))
     emph = {_normalise(w) for w in (emphasis or []) if _normalise(w)}
     margin = margin_v if margin_v is not None else int(height * 0.17)
 
@@ -110,7 +116,7 @@ def build_ass(
 ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
-WrapStyle: 2
+WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
@@ -122,7 +128,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
     lines: list[str] = []
-    for chunk in chunk_words(words):
+    for chunk in chunk_words(words, max_chars=max(12, fits)):
         pieces: list[str] = []
         for w in chunk.words:
             text = _escape(w.text)

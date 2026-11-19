@@ -395,6 +395,14 @@ def cmd_make(args: argparse.Namespace) -> int:
             broll_len = probe_mod.probe(broll).duration
         log(f"      picture from the b-roll, sound from the source")
 
+    # Whatever supplies the picture may be letterboxed inside its own frame,
+    # and a 9:16 crop of that keeps the bars. Checked once per run.
+    picture = broll if broll is not None else source
+    picture_crop = render_mod.detect_letterbox(
+        picture, broll_len if broll is not None else pr.duration)
+    if picture_crop:
+        log(f"      removing letterbox: {picture_crop}")
+
     composed = args.music in music_mod.MOOD_NAMES
     music = None if composed or not args.music else         Path(args.music).expanduser().resolve()
     if composed:
@@ -447,6 +455,7 @@ def cmd_make(args: argparse.Namespace) -> int:
             cues_with_files=cues_with_files, spec=spec,
             ass_path=ass_path, music=clip_music, has_audio=pr.has_audio,
             broll=broll, broll_start=max(0.0, broll_at),
+            picture_crop=picture_crop,
         )
         loud = render_mod.measure_loudness(dest)
         info = render_mod.probe_output(dest)

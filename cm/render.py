@@ -234,6 +234,51 @@ def _measure_pass(
     return {k: str(data[k]) for k in required}
 
 
+def detect_letterbox(path: Path | str, duration: float = 0.0) -> str:
+    """Return a `crop=` filter that removes black bars, or "" if there are none.
+
+    A cinematic trailer is letterboxed inside its 16:9 file, and a 9:16 centre
+    crop of that frame takes the bars with it -- black at the top and bottom of
+    a vertical video, which is the one thing the format cannot have. Sampled at
+    three points and unioned, so a shot that happens to be dark does not
+    convince us the picture is smaller than it is.
+    """
+    import re
+    from .util import require, run
+
+    duration = duration or 60.0
+    boxes = []
+    for at in (duration * 0.25, duration * 0.5, duration * 0.75):
+        proc = run([
+            require("ffmpeg"), "-hide_banner", "-nostdin",
+            "-ss", f"{max(0.0, at):.2f}", "-t", "2",
+            "-i", str(path), "-vf", "cropdetect=24:2:0", "-f", "null", "-",
+        ], check=False)
+        found = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", proc.stderr or "")
+        if found:
+            boxes.append(tuple(int(v) for v in found[-1]))
+    if not boxes:
+        return ""
+
+    left = min(b[2] for b in boxes)
+    top = min(b[3] for b in boxes)
+    right = max(b[2] + b[0] for b in boxes)
+    bottom = max(b[3] + b[1] for b in boxes)
+    width, height = right - left, bottom - top
+    if width <= 0 or height <= 0:
+        return ""
+
+    info = probe_output(path)
+    full_w, full_h = int(info.get("width") or 0), int(info.get("height") or 0)
+    if not full_w or not full_h:
+        return ""
+    # Ignore a crop that barely changes anything: cropdetect is noisy by a
+    # pixel or two and re-encoding for that is not worth it.
+    if width >= full_w * 0.98 and height >= full_h * 0.98:
+        return ""
+    return f"crop={width}:{height}:{left}:{top}"
+
+
 def render_clip(
     source: Path | str,
     dest: Path,
@@ -247,6 +292,7 @@ def render_clip(
     has_audio: bool = True,
     broll: Path | None = None,
     broll_start: float = 0.0,
+    picture_crop: str = "",
 ) -> Path:
     """Cut, reframe, caption, mix and normalise one clip.
 
@@ -285,6 +331,8 @@ def render_clip(
         args += ["-stream_loop", "-1", "-i", str(music)]
 
     video_chain = _video_chain(spec, ass_path=ass_path)
+    if picture_crop:
+        video_chain = f"{picture_crop},{video_chain}"
     audio_graph, mastered = _audio_graph(
         cues_with_files, has_audio=has_audio, music=music, spec=spec,
         first_input_index=voice_input + 1, voice_input=voice_input,
