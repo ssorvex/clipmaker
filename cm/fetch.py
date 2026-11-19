@@ -208,9 +208,22 @@ def _stream(args: list[str], *, echo: bool = True) -> tuple[int, str]:
 
 
 def _download_video(cmd: list[str], url: str, cache_dir: Path, *,
-                    max_height: int, cookies: str) -> None:
-    fmt = (f"bv*[height<={max_height}][vcodec^=avc1]+ba[acodec^=mp4a]/"
-           f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b")
+                    max_height: int, cookies: str, vertical: bool = False) -> None:
+    """Fetch the best copy whose SHORT side is within `max_height`.
+
+    Orientation has to be known first. A format filter of `height<=1080` reads
+    as "1080p" for a landscape source and as something much worse for a
+    vertical one, where 1080p means 1080x1920 and the filter throws it out in
+    favour of whatever small format happens to fit. A Short that offers
+    1080x1920 came down as 480x854 until this took orientation into account.
+    """
+    short, long_cap = max_height, int(max_height * 2.6)
+    if vertical:
+        size = f"[width<={short}][height<={long_cap}]"
+    else:
+        size = f"[height<={short}][width<={long_cap}]"
+    fmt = (f"bv*{size}[vcodec^=avc1]+ba[acodec^=mp4a]/"
+           f"bv*{size}+ba/b{size}/b")
     args = [
         *cmd, "--no-playlist", "--no-warnings",
         "-f", fmt, "--merge-output-format", "mp4",
@@ -286,8 +299,11 @@ def fetch(url: str, cache_dir: Path, *, max_height: int = 1080,
     cached = existing is not None
 
     if existing is None:
+        width = int(info.get("width") or 0)
+        height = int(info.get("height") or 0)
         _download_video(cmd, url, cache_dir, max_height=max_height,
-                        cookies=cookies_from_browser)
+                        cookies=cookies_from_browser,
+                        vertical=height > width > 0)
         existing = _find_video(cache_dir, video_id)
 
     if want_subs and subs is None:
